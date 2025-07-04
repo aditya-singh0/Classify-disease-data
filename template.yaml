@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Research Paper Classification API using FastAPI and AWS Lambda
+
+Parameters:
+  UseBaseline:
+    Type: String
+    Default: "true"
+    Description: Whether to use baseline classifier
+  UseLangchain:
+    Type: String
+    Default: "false"
+    Description: Whether to enable LangChain analysis
+  ModelPath:
+    Type: String
+    Default: "models/phi2-lora-cancer"
+    Description: Path to the model
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 2048
+    Runtime: python3.9
+    Environment:
+      Variables:
+        USE_BASELINE: !Ref UseBaseline
+        USE_LANGCHAIN: !Ref UseLangchain
+        MODEL_PATH: !Ref ModelPath
+
+Resources:
+  ResearchPaperClassifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.api.main.handler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Environment:
+        Variables:
+          PYTHONPATH: /var/task
+
+  # API Gateway
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  ResearchPaperClassifierFunction:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt ResearchPaperClassifierFunction.Arn 

@@ -1,484 +1,298 @@
-# Research Paper Analysis & Classification Pipeline - Deployment Guide
+# Deployment Guide
 
-This guide covers deployment options for the research paper classification pipeline, including local development, Docker, and cloud platforms as required by the assignment.
+This guide provides step-by-step instructions for deploying the Research Paper Classification API to various cloud platforms.
 
-## Table of Contents
+## Prerequisites
 
-1. [Local Development](#local-development)
-2. [Docker Deployment](#docker-deployment)
-3. [AWS Lambda Deployment](#aws-lambda-deployment)
-4. [Google Cloud Run Deployment](#google-cloud-run-deployment)
-5. [Hugging Face Spaces Deployment](#hugging-face-spaces-deployment)
-6. [Monitoring and Scaling](#monitoring-and-scaling)
+Before deploying, ensure you have the following installed:
 
-## Local Development
+- **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
+- **Git** - [Install Git](https://git-scm.com/downloads)
+- **Python 3.9+** - [Install Python](https://www.python.org/downloads/)
 
-### Prerequisites
+## Quick Start
+
+Use the master deployment script for easy deployment:
 
 ```bash
-# Install Python 3.9+
-python --version
+# Make the script executable
+chmod +x deploy.sh
 
-# Install dependencies
-pip install -r requirements.txt
+# Run interactive menu
+./deploy.sh
 
-# Download NLTK data
-python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
+# Or deploy directly to a specific platform
+./deploy.sh local      # Deploy locally
+./deploy.sh gcp        # Deploy to Google Cloud Run
+./deploy.sh aws        # Deploy to AWS Lambda
+./deploy.sh hf         # Deploy to Hugging Face Spaces
+./deploy.sh azure      # Deploy to Azure
 ```
 
-### Running the Pipeline
+## Platform-Specific Deployment
+
+### 1. Local Deployment with Docker
+
+**Easiest option for testing and development.**
 
 ```bash
-# Run complete training pipeline
-python train_pipeline.py --model_name microsoft/phi-2 --num_epochs 3
+# Build and run locally
+./deploy.sh local
 
-# Run evaluation only
-python train_pipeline.py --skip_training --model_path ./output/models/microsoft_phi-2-lora-cancer
-
-# Start API server
-python -m src.api.main
-```
-
-### API Testing
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Single classification
-curl -X POST http://localhost:8000/classify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pubmed_id": "PMID123456",
-    "abstract": "This study investigates lung cancer progression and identifies novel therapeutic targets."
-  }'
-
-# Batch classification
-curl -X POST http://localhost:8000/batch-classify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "abstracts": [
-      {
-        "pubmed_id": "PMID123456",
-        "abstract": "This study investigates lung cancer progression..."
-      },
-      {
-        "pubmed_id": "PMID789012",
-        "abstract": "The effects of exercise on cardiovascular health..."
-      }
-    ]
-  }'
-```
-
-## Docker Deployment
-
-### Building and Running
-
-```bash
-# Build Docker image
+# Or manually:
 docker build -t research-paper-classifier .
-
-# Run container
-docker run -p 8000:8000 research-paper-classifier
-
-# Run with Docker Compose
-docker-compose up -d
+docker run -d --name research-paper-classifier -p 8000:8000 research-paper-classifier
 ```
 
-### Docker Compose Services
+**Access your API:**
+- Service URL: http://localhost:8000
+- Health Check: http://localhost:8000/health
+- API Docs: http://localhost:8000/docs
 
-The `docker-compose.yml` includes:
+### 2. Google Cloud Run
 
-- **research-paper-classifier**: Main API service
-- **redis**: Caching and session management
-- **prometheus**: Metrics collection
-- **grafana**: Monitoring dashboard
+**Recommended for production deployments.**
+
+#### Prerequisites:
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+- Google Cloud account with billing enabled
+
+#### Deployment:
+```bash
+# Set your project ID
+export PROJECT_ID="your-gcp-project-id"
+
+# Deploy
+./deploy-google-cloud-run.sh
+```
+
+#### Features:
+- Auto-scaling
+- Pay-per-use pricing
+- HTTPS by default
+- Global CDN
+
+### 3. AWS Lambda
+
+**Serverless option for cost-effective deployments.**
+
+#### Prerequisites:
+- [AWS CLI](https://aws.amazon.com/cli/)
+- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+- AWS account
+
+#### Deployment:
+```bash
+# Configure AWS credentials
+aws configure
+
+# Deploy
+./deploy-aws-lambda.sh
+```
+
+#### Features:
+- Serverless (no server management)
+- Pay-per-request
+- Auto-scaling
+- Integration with AWS services
+
+### 4. Hugging Face Spaces
+
+**Perfect for ML-focused applications and demos.**
+
+#### Prerequisites:
+- [Hugging Face account](https://huggingface.co/join)
+- `huggingface_hub` Python package
+
+#### Deployment:
+```bash
+# Set your username
+export HF_USERNAME="your-username"
+
+# Deploy
+./deploy-huggingface-spaces.sh
+```
+
+#### Features:
+- Free hosting for ML applications
+- Built-in model hosting
+- Easy sharing and collaboration
+- Automatic HTTPS
+
+### 5. Azure Container Instances
+
+**Microsoft's container hosting solution.**
+
+#### Prerequisites:
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- Azure account
+
+#### Deployment:
+```bash
+# Login to Azure
+az login
+
+# Deploy
+./deploy-azure-container-instances.sh
+```
+
+#### Features:
+- Container-native
+- Pay-per-second billing
+- Integration with Azure services
+- Global deployment
+
+## Configuration Options
 
 ### Environment Variables
 
-```bash
-# Docker environment variables
-USE_BASELINE=true                    # Use baseline classifier
-USE_LANGCHAIN=false                  # Enable LangChain features
-MODEL_PATH=models/phi2-lora-cancer   # Path to fine-tuned model
-```
+You can customize the deployment by setting these environment variables:
 
-## AWS Lambda Deployment
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_BASELINE` | `true` | Use baseline classifier instead of fine-tuned model |
+| `USE_LANGCHAIN` | `false` | Enable LangChain analysis |
+| `MODEL_PATH` | `models/phi2-lora-cancer` | Path to the model directory |
 
-### Prerequisites
-
-```bash
-# Install AWS CLI
-aws configure
-
-# Install Serverless Framework
-npm install -g serverless
-```
-
-### Serverless Configuration
-
-Create `serverless.yml`:
-
-```yaml
-service: research-paper-classifier
-
-provider:
-  name: aws
-  runtime: python3.9
-  region: us-east-1
-  memorySize: 2048
-  timeout: 30
-
-functions:
-  api:
-    handler: src.api.lambda_handler.handler
-    events:
-      - http:
-          path: /{proxy+}
-          method: ANY
-          cors: true
-    environment:
-      USE_BASELINE: true
-      USE_LANGCHAIN: false
-      MODEL_PATH: models/phi2-lora-cancer
-
-package:
-  patterns:
-    - '!node_modules/**'
-    - '!tests/**'
-    - '!*.pyc'
-    - '!.git/**'
-```
-
-### Lambda Handler
-
-Create `src/api/lambda_handler.py`:
-
-```python
-import json
-from mangum import Mangum
-from src.api.main import app
-
-handler = Mangum(app)
-```
-
-### Deployment Commands
+### Example Customization
 
 ```bash
-# Deploy to AWS Lambda
-serverless deploy
-
-# Deploy to specific stage
-serverless deploy --stage production
-
-# Remove deployment
-serverless remove
+# Deploy with fine-tuned model and LangChain
+docker run -d \
+  --name research-paper-classifier \
+  -p 8000:8000 \
+  -e USE_BASELINE=false \
+  -e USE_LANGCHAIN=true \
+  -e MODEL_PATH=models/phi2-lora-cancer \
+  research-paper-classifier
 ```
 
-## Google Cloud Run Deployment
+## API Endpoints
 
-### Prerequisites
+Once deployed, your API will have the following endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Health check and model information |
+| `/health` | GET | Health check endpoint |
+| `/classify` | POST | Classify a single abstract |
+| `/batch-classify` | POST | Classify multiple abstracts |
+| `/extract-diseases` | POST | Extract diseases from abstract |
+| `/model-info` | GET | Get detailed model information |
+| `/docs` | GET | Interactive API documentation |
+
+### Example API Usage
 
 ```bash
-# Install Google Cloud SDK
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
+# Classify a single abstract
+curl -X POST "http://your-api-url/classify" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pubmed_id": "12345",
+    "abstract": "This study investigates the role of p53 mutations in breast cancer development..."
+  }'
+
+# Health check
+curl "http://your-api-url/health"
 ```
 
-### Cloud Build Configuration
+## Monitoring and Logs
 
-Create `cloudbuild.yaml`:
-
-```yaml
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/research-paper-classifier', '.']
-  
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/research-paper-classifier']
-  
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'research-paper-classifier'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/research-paper-classifier'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-      - '--memory'
-      - '2Gi'
-      - '--cpu'
-      - '2'
-      - '--max-instances'
-      - '10'
-```
-
-### Deployment Commands
-
+### Local Docker
 ```bash
-# Build and deploy
-gcloud builds submit --config cloudbuild.yaml
+# View logs
+docker logs research-paper-classifier
 
-# Deploy directly
-gcloud run deploy research-paper-classifier \
-  --image gcr.io/YOUR_PROJECT_ID/research-paper-classifier \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --memory 2Gi \
-  --cpu 2
+# Monitor resource usage
+docker stats research-paper-classifier
 ```
 
-## Hugging Face Spaces Deployment
+### Cloud Platforms
 
-### Space Configuration
+Each platform provides its own monitoring:
 
-Create `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy to Hugging Face Spaces
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      
-      - name: Deploy to Spaces
-        uses: huggingface/huggingface_hub@main
-        with:
-          repo-type: space
-          space-sdk: gradio
-          space-hardware: cpu-basic
-          space-settings: |
-            title: Research Paper Classifier
-            emoji: 🔬
-            colorFrom: blue
-            colorTo: purple
-            sdk: gradio
-            sdk_version: 3.50.2
-            app_file: app.py
-            pinned: false
-```
-
-### Gradio Interface
-
-Create `app.py` for Hugging Face Spaces:
-
-```python
-import gradio as gr
-from src.classification import load_classifier
-
-# Load classifier
-classifier = load_classifier(None, use_baseline=True)
-
-def classify_abstract(abstract):
-    """Classify a single abstract."""
-    result = classifier.predict_single(abstract, "demo")
-    return classifier.format_output(result)
-
-# Create Gradio interface
-iface = gr.Interface(
-    fn=classify_abstract,
-    inputs=gr.Textbox(label="Research Paper Abstract", lines=5),
-    outputs=gr.JSON(label="Classification Results"),
-    title="Research Paper Analysis & Classification",
-    description="Classify research paper abstracts into cancer and non-cancer categories with disease extraction."
-)
-
-iface.launch()
-```
-
-## Monitoring and Scaling
-
-### Prometheus Metrics
-
-The API includes built-in metrics:
-
-```python
-# Custom metrics
-from prometheus_client import Counter, Histogram, generate_latest
-
-# Request counters
-REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint'])
-CLASSIFICATION_COUNT = Counter('classifications_total', 'Total classifications', ['label'])
-
-# Response time histogram
-REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration')
-```
-
-### Grafana Dashboard
-
-Create monitoring dashboard with:
-
-- Request rate and latency
-- Classification accuracy
-- Model performance metrics
-- Error rates and logs
-
-### Auto-scaling Configuration
-
-```yaml
-# Kubernetes HPA
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: research-paper-classifier-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: research-paper-classifier
-  minReplicas: 2
-  maxReplicas: 20
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-```
-
-## Performance Optimization
-
-### Caching Strategy
-
-```python
-# Redis caching for repeated requests
-import redis
-import hashlib
-import json
-
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
-def get_cached_result(abstract):
-    """Get cached classification result."""
-    key = hashlib.md5(abstract.encode()).hexdigest()
-    cached = redis_client.get(key)
-    return json.loads(cached) if cached else None
-
-def cache_result(abstract, result):
-    """Cache classification result."""
-    key = hashlib.md5(abstract.encode()).hexdigest()
-    redis_client.setex(key, 3600, json.dumps(result))  # 1 hour TTL
-```
-
-### Batch Processing
-
-```python
-# Optimized batch processing
-async def process_batch(abstracts, batch_size=32):
-    """Process abstracts in optimized batches."""
-    results = []
-    for i in range(0, len(abstracts), batch_size):
-        batch = abstracts[i:i + batch_size]
-        batch_results = await process_batch_async(batch)
-        results.extend(batch_results)
-    return results
-```
-
-## Security Considerations
-
-### API Security
-
-```python
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
-@app.post("/classify")
-@limiter.limit("10/minute")
-def classify_abstract(request: AbstractRequest):
-    # Implementation
-    pass
-```
-
-### Model Security
-
-```python
-# Input validation
-from pydantic import validator
-
-class AbstractRequest(BaseModel):
-    abstract: str
-    
-    @validator('abstract')
-    def validate_abstract(cls, v):
-        if len(v) > 10000:
-            raise ValueError('Abstract too long')
-        if not v.strip():
-            raise ValueError('Abstract cannot be empty')
-        return v.strip()
-```
+- **Google Cloud Run**: Cloud Console > Cloud Run > Your Service
+- **AWS Lambda**: CloudWatch Logs and Metrics
+- **Hugging Face Spaces**: Space dashboard
+- **Azure**: Azure Monitor and Log Analytics
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Memory Issues**: Increase container memory or use model quantization
-2. **Timeout Errors**: Optimize model loading and inference
-3. **Cold Start**: Use model caching and warm-up endpoints
-4. **Scale Issues**: Implement proper load balancing and auto-scaling
+1. **Port already in use**
+   ```bash
+   # Stop existing container
+   docker stop research-paper-classifier
+   docker rm research-paper-classifier
+   ```
 
-### Logging and Debugging
+2. **Memory issues**
+   - Increase memory allocation in cloud platform settings
+   - Use baseline model instead of fine-tuned model
 
-```python
-# Structured logging
-import structlog
+3. **Authentication errors**
+   - Ensure you're logged in to the respective cloud platform
+   - Check API keys and permissions
 
-logger = structlog.get_logger()
+4. **Model loading failures**
+   - Verify model files are present in the `models/` directory
+   - Check `MODEL_PATH` environment variable
 
-logger.info("Processing request", 
-           pubmed_id=request.pubmed_id,
-           abstract_length=len(request.abstract),
-           model_type=classifier_type)
-```
+### Getting Help
+
+- Check the logs: `docker logs research-paper-classifier`
+- Verify health endpoint: `curl http://your-api-url/health`
+- Review API documentation: `http://your-api-url/docs`
 
 ## Cost Optimization
 
-### AWS Lambda
-
-- Use provisioned concurrency for consistent workloads
-- Optimize memory allocation (more memory = faster execution)
-- Use S3 for model storage instead of Lambda layers
-
 ### Google Cloud Run
+- Set minimum instances to 0 for cost savings
+- Use appropriate memory/CPU allocation
 
-- Use CPU allocation based on actual usage
-- Implement request batching to reduce cold starts
-- Use Cloud CDN for static content
+### AWS Lambda
+- Optimize function timeout and memory
+- Use provisioned concurrency for consistent performance
 
-### General Tips
+### Hugging Face Spaces
+- Free tier available
+- Consider paid plans for production use
 
-- Monitor usage patterns and adjust resources accordingly
-- Use spot instances for non-critical workloads
-- Implement proper caching to reduce compute costs
+### Azure Container Instances
+- Use appropriate VM size
+- Consider Azure Container Apps for auto-scaling
 
-## Conclusion
+## Security Considerations
 
-This deployment guide covers all major cloud platforms and deployment scenarios required by the assignment. The pipeline is designed to be:
+1. **API Keys**: Implement authentication for production deployments
+2. **HTTPS**: All cloud platforms provide HTTPS by default
+3. **CORS**: Configure CORS settings for your domain
+4. **Rate Limiting**: Implement rate limiting for public APIs
+5. **Input Validation**: The API includes input validation, but review for your use case
 
-- **Scalable**: Supports auto-scaling and load balancing
-- **Secure**: Includes rate limiting and input validation
-- **Monitorable**: Provides comprehensive metrics and logging
-- **Cost-effective**: Optimized for various deployment scenarios
+## Updates and Maintenance
 
-Choose the deployment option that best fits your requirements and budget constraints. 
+### Updating the Deployment
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild and redeploy
+./deploy.sh [platform]
+```
+
+### Backup and Recovery
+
+- **Models**: Keep backups of your trained models
+- **Configuration**: Version control your deployment scripts
+- **Data**: Implement data backup strategies for production
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section above
+2. Review the API documentation at `/docs`
+3. Check the logs for error messages
+4. Open an issue in the project repository 
